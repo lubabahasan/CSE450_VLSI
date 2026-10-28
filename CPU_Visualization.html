@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPU Instruction Animator</title>
+<style>
+:root{
+  --ink:#16213E; --muted:#5F6C8A; --line:#E1E8F5; --card:#FFFFFF;
+  --blue:#2F6BFF; --sky:#0EA5E9; --amber:#F59E0B; --green:#10B981; --purple:#8B5CF6; --pink:#EC4899; --red:#EF4444;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); min-height:100vh;
+  font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  background:linear-gradient(180deg,#E6F0FF 0%,#F6FAFF 38%,#FFFFFF 100%) fixed;
+}
+.wrap{max-width:1560px; margin:0 auto; padding:22px 24px 40px;}
+h1{margin:0; font-size:26px; letter-spacing:-.01em;}
+.tag{display:inline-block; margin-left:10px; padding:3px 10px; border-radius:999px; background:#fff; border:1px solid var(--line); font-size:12.5px; color:var(--muted); vertical-align:middle; font-weight:600;}
+.lead{margin:6px 0 18px; color:var(--muted); font-size:14.5px;}
+.layout{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px; align-items:start;}
+@media (max-width:1100px){.layout{grid-template-columns:1fr;}}
+.card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:16px; box-shadow:0 6px 22px rgba(47,107,255,.07);}
+.card h3{margin:0 0 10px; font-size:12.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);}
+.row-ctl{display:flex; flex-wrap:wrap; gap:14px; align-items:center;}
+.row-ctl + .row-ctl{margin-top:14px;}
+.ops{display:flex; flex-wrap:wrap; gap:10px;}
+.op{
+  border:2px solid var(--line); background:#fff; border-radius:14px; padding:9px 16px; text-align:left;
+  cursor:pointer; min-width:150px; font-family:inherit; transition:transform .12s, box-shadow .12s, border-color .12s;
+}
+.op:hover{transform:translateY(-2px); border-color:var(--c);}
+.op b{display:block; font-size:18px; color:var(--c); letter-spacing:.02em;}
+.op span{display:block; font-size:12.5px; color:var(--muted); margin-top:1px;}
+.op.sel{border-color:var(--c); background:var(--cbg); box-shadow:0 5px 16px rgba(22,33,62,.12);}
+.sep{width:1px; align-self:stretch; background:var(--line);}
+.pill{
+  border:1.5px solid var(--line); background:#fff; color:var(--ink); border-radius:999px; padding:8px 16px;
+  font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:7px;
+}
+.pill:hover:not(:disabled){border-color:var(--blue); color:var(--blue);}
+.pill:disabled{opacity:.45; cursor:not-allowed;}
+.pill.rst{border-color:#F7C5C5; color:#B42318; background:#FFF5F5;}
+.pill.prog{border-color:#BFD3FF; color:#1D4FD7; background:#F0F5FF;}
+.pill.toggle input{accent-color:var(--blue);}
+.pill.pulse{border-color:var(--blue); background:var(--blue); color:#fff; animation:nudge 1s infinite;}
+@keyframes nudge{0%,100%{box-shadow:0 0 0 0 rgba(47,107,255,.45)}50%{box-shadow:0 0 0 8px rgba(47,107,255,0)}}
+.opd{font-size:13px; color:var(--muted); font-weight:600; display:inline-flex; align-items:center; gap:8px;}
+.opd input{
+  width:64px; padding:7px 9px; border:1.5px solid var(--line); border-radius:10px; font:700 15px ui-monospace,Consolas,monospace;
+  text-transform:uppercase; text-align:center; color:var(--ink); background:#fff;
+}
+.opd input:disabled{background:#F3F5FA; color:#9AA6C0;}
+.speed{font-size:13px; color:var(--muted); font-weight:600; display:inline-flex; align-items:center; gap:8px;}
+.speed input{accent-color:var(--blue); width:130px;}
+.speed b{color:var(--ink); min-width:38px;}
+.cycle{font:600 13px ui-monospace,Consolas,monospace; color:#1D4FD7; background:#F0F5FF; border-radius:8px; padding:5px 10px; display:none;}
+.cycle.show{display:inline-block;}
+.stepper{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+.stepper span{padding:6px 14px; border-radius:999px; background:#F1F4FA; color:#7A87A6; font-size:13px; font-weight:700; border:1.5px solid transparent;}
+.stepper span.now{background:#EAF1FF; color:#1D4FD7; border-color:var(--blue);}
+.stepper span.done{background:#E7F8F1; color:#0A7F58;}
+.caption{
+  min-height:58px; padding:12px 16px; border-radius:12px; background:#F7FAFF; border:1px solid #DCE7FB;
+  font-size:15px; line-height:1.55; margin-bottom:12px;
+}
+.caption code, .note code{font:700 13.5px ui-monospace,Consolas,monospace; background:#fff; border:1px solid #D9E3F7; border-radius:6px; padding:1px 6px;}
+svg#cpu{width:100%; height:min(740px, calc(100vh - 380px)); min-height:480px; display:block; background:#FBFDFF; border:1px solid var(--line); border-radius:12px;}
+.legend{display:flex; flex-wrap:wrap; gap:16px; margin-top:10px; font-size:12.5px; color:var(--muted);}
+.legend i{display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px; vertical-align:-1px;}
+.reg{display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; margin-bottom:4px;}
+.reg .dot{width:11px; height:11px; border-radius:50%;}
+.reg b{width:38px; font-size:14px;}
+.reg code{font:700 14.5px ui-monospace,Consolas,monospace; color:var(--ink);}
+.flashbg{animation:flashbg .9s ease;}
+@keyframes flashbg{0%{background:#C9F7E3}100%{background:transparent}}
+.bits{display:flex; gap:3px; flex-wrap:nowrap; margin:6px 0 8px;}
+.bit{width:21px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; font:700 13px ui-monospace,Consolas,monospace; background:#F1F4FA; color:#9AA6C0;}
+.bit.o{background:#E4F0FF; color:#1D4FD7;}
+.bit.m{background:#FFF0CC; color:#9A6200;}
+.bit.gap{margin-left:8px;}
+.wordline{font-size:13px; color:var(--muted);}
+.wordline b{color:var(--ink); font-family:ui-monospace,Consolas,monospace;}
+.ctl-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.ctl-grid div{display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-radius:10px; background:#F6F8FD; font-size:13px; font-weight:600; color:var(--muted);}
+.ctl-grid code{font:700 14px ui-monospace,Consolas,monospace; color:var(--ink);}
+.ctl-grid div.one{background:#E7F8F1; color:#0A7F58;}
+.ctl-grid div.one code{color:#0A7F58;}
+.note{font-size:13.5px; line-height:1.6; color:var(--muted); margin:0;}
+.note b{color:var(--ink);}
+/* ---------- svg parts ---------- */
+.wire{fill:none; stroke:#C5D0E6; stroke-width:3; marker-end:url(#ah-gray);}
+.wire.ctl{stroke:#F6DDA6; stroke-dasharray:8 6; marker-end:url(#ah-ctlgray);}
+.wire.out{stroke:#9FB0D3; marker-end:url(#ah-out);}
+.wire.live-data{stroke:#2F6BFF; marker-end:url(#ah-blue); stroke-width:4;}
+.wire.live-instr{stroke:#8B5CF6; marker-end:url(#ah-purple); stroke-width:4;}
+.wire.live-addr{stroke:#0EA5E9; marker-end:url(#ah-sky); stroke-width:4;}
+.wire.live-result{stroke:#10B981; marker-end:url(#ah-green); stroke-width:4;}
+.wire.live-ctl{stroke:#F59E0B; marker-end:url(#ah-amber); stroke-width:4;}
+.lbl{font:600 12px system-ui,sans-serif; fill:#4D5B7C; paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round;}
+.lbl.c{fill:#B9780A;}
+.blk .shape{fill:#fff; stroke:#B9C6E2; stroke-width:2.5; transition:stroke .2s, stroke-width .2s;}
+.blk.seq .shape{fill:#E8F0FF; stroke:#7EA3F5;}
+.blk.comb .shape{fill:#F4F6FB; stroke:#B2BED6;}
+.blk.ctl .shape{fill:#FFF3D1; stroke:#F2C25B;}
+.blk.active .shape{stroke-width:4.5; filter:drop-shadow(0 0 10px rgba(47,107,255,.55));}
+.blk.seq.active .shape{stroke:#2F6BFF;}
+.blk.comb.active .shape{stroke:#0EA5E9; filter:drop-shadow(0 0 10px rgba(14,165,233,.5));}
+.blk.ctl.active .shape{stroke:#F59E0B; filter:drop-shadow(0 0 10px rgba(245,158,11,.55));}
+.ttl{font:700 14.5px system-ui,sans-serif; fill:#16213E; text-anchor:middle;}
+.val{font:700 24px ui-monospace,Consolas,monospace; fill:#16213E; text-anchor:middle; transform-box:fill-box; transform-origin:center;}
+.mono{font:700 16px ui-monospace,Consolas,monospace; fill:#16213E; text-anchor:middle; transform-box:fill-box; transform-origin:center;}
+.sub{font:500 12px system-ui,sans-serif; fill:#6C7A99; text-anchor:middle;}
+.outl{font:700 14px ui-monospace,Consolas,monospace; fill:#16213E; text-anchor:middle; transform-box:fill-box; transform-origin:center;}
+.flash{animation:flash .9s ease;}
+@keyframes flash{0%{fill:#10B981; transform:scale(1.35);}100%{transform:scale(1);}}
+.badge rect{fill:#fff; stroke:#B9C6E2; stroke-width:2;}
+.badge text{font:700 14px system-ui,sans-serif; fill:#6C7A99; text-anchor:middle; dominant-baseline:central;}
+.badge.on rect{fill:#E7F8F1; stroke:#10B981;}
+.badge.on text{fill:#0A7F58;}
+#rst.on rect{fill:#FDECEC; stroke:#EF4444;}
+#rst.on text{fill:#B42318;}
+.pkt rect{fill:#2F6BFF; stroke:#fff; stroke-width:2; filter:drop-shadow(0 2px 4px rgba(22,33,62,.25));}
+.pkt text{font:700 13px ui-monospace,Consolas,monospace; fill:#fff; text-anchor:middle; dominant-baseline:central;}
+.pkt.instr rect{fill:#8B5CF6;}
+.pkt.addr rect{fill:#0EA5E9;}
+.pkt.result rect{fill:#10B981;}
+.pkt.ctl rect{fill:#F59E0B;}
+.pkt.ctl text{fill:#3B2A00;}
+.pkt.off rect{fill:#E3E8F3;}
+.pkt.off text{fill:#64708F;}
+.pkt.dim rect{fill:#B5BFD6;}
+/* ---------- test program table ---------- */
+.tt-head{display:flex; flex-wrap:wrap; align-items:center; gap:12px;}
+.tt-head h3{flex:1 1 auto;}
+.tt-score{font:700 13px ui-monospace,Consolas,monospace; padding:5px 11px; border-radius:999px; background:#F1F4FA; color:#6C7A99;}
+.tt-score.ok{background:#E7F8F1; color:#0A7F58;}
+.tt-score.bad{background:#FDECEC; color:#B42318;}
+.tt-wrap{overflow-x:auto;}
+table.tt{width:100%; border-collapse:collapse; font-size:13.5px;}
+.tt th{text-align:left; padding:7px 10px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); border-bottom:2px solid var(--line); white-space:nowrap;}
+.tt td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
+.tt tr.row{cursor:pointer; transition:background .15s;}
+.tt tr.row:hover{background:#F4F8FF;}
+.tt tr.run{background:#EAF1FF; box-shadow:inset 4px 0 0 var(--blue);}
+.tt tr.pass{background:#F3FBF7; box-shadow:inset 4px 0 0 var(--green);}
+.tt tr.fail{background:#FFF3F3; box-shadow:inset 4px 0 0 var(--red);}
+.tt small{display:block; color:var(--muted); font-size:11.5px; margin-top:1px; font-family:ui-monospace,Consolas,monospace;}
+.tt td.cy b{font-size:16px;}
+.tt b.in{font:700 14px ui-monospace,Consolas,monospace; color:var(--ink);}
+.tt td.wh{color:#4A5775; min-width:210px; line-height:1.45;}
+.tt td.mo{font:600 13px ui-monospace,Consolas,monospace; white-space:nowrap; color:var(--ink);}
+.tt td.okc{color:#0A7F58;}
+.tt td.badc{color:#B42318;}
+.tt td.rs{white-space:nowrap; font-weight:700;}
+.tt .go{color:#9AA6C0; font-weight:600;}
+.tt tr.row:hover .go{color:var(--blue);}
+.tt .p, .tc-res.p{color:#0A7F58;}
+.tt .f, .tc-res.f{color:#B42318;}
+table.mini{width:100%; border-collapse:collapse; font:600 13.5px ui-monospace,Consolas,monospace;}
+.mini th{font:700 11px system-ui,sans-serif; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; padding:4px 6px; text-align:center;}
+.mini td{padding:7px 6px; text-align:center; border-top:1px solid var(--line);}
+.mini td:first-child{text-align:left; font:600 12.5px system-ui,sans-serif; color:var(--muted);}
+.mini td.okc{color:#0A7F58; background:#E7F8F1;}
+.mini td.badc{color:#B42318; background:#FDECEC;}
+.tc-top{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; font-size:14px;}
+.tc-res{font-weight:700; font-size:13.5px; color:#6C7A99;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CPU instruction animator <span class="tag">Set 4 · 8-bit accumulator CPU</span></h1>
+
+  <div class="layout">
+    <section>
+      <div class="card">
+        <h3>Choose an instruction</h3>
+        <div class="row-ctl">
+          <div class="ops" id="ops">
+            <button class="op sel" data-op="LDI" style="--c:#2F6BFF;--cbg:#EAF1FF"><b>LDI</b><span>ACC ← immediate</span></button>
+            <button class="op" data-op="ADD" style="--c:#0E9F6E;--cbg:#E7F8F1"><b>ADD</b><span>ACC ← ACC + immediate</span></button>
+            <button class="op" data-op="AND" style="--c:#8B5CF6;--cbg:#F2ECFF"><b>AND</b><span>ACC ← ACC AND immediate</span></button>
+            <button class="op" data-op="STA" style="--c:#E08A00;--cbg:#FFF4DB"><b>STA</b><span>R ← ACC</span></button>
+            <button class="op" data-op="LDR" style="--c:#DB2777;--cbg:#FFEAF3"><b>LDR</b><span>ACC ← R</span></button>
+          </div>
+          <div class="sep"></div>
+          <div class="ops">
+            <button class="pill rst" id="btnReset">↺ Reset CPU</button>
+            <button class="pill prog" id="btnProg">▶ Run Appendix B program</button>
+          </div>
+        </div>
+        <div class="row-ctl">
+          <label class="opd">Operand (hex) <input id="opd" value="1E" maxlength="2" autocomplete="off" spellcheck="false"></label>
+          <button class="pill" id="btnReplay">⟲ Replay</button>
+          <button class="pill" id="btnPause">⏸ Pause</button>
+          <label class="pill toggle"><input type="checkbox" id="chkStep"> Step by step</label>
+          <button class="pill" id="btnNext" disabled>Next ▸</button>
+          <label class="speed">Speed <input type="range" id="speed" min="1" max="10" value="4"><b id="speedv">1×</b></label>
+          <span id="cycle" class="cycle"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="stepper"><span id="st0">1 · Fetch</span><span id="st1">2 · Decode</span><span id="st2">3 · Execute</span><span id="st3">4 · Write-back</span></div>
+        <div class="caption" id="caption"></div>
+        <svg id="cpu" viewBox="0 -24 1060 716" role="img" aria-label="Animated circuit of the 8-bit accumulator CPU">
+          <defs>
+            <marker id="ah-gray" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#C5D0E6"/></marker>
+            <marker id="ah-ctlgray" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#F6DDA6"/></marker>
+            <marker id="ah-out" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#9FB0D3"/></marker>
+            <marker id="ah-blue" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#2F6BFF"/></marker>
+            <marker id="ah-purple" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#8B5CF6"/></marker>
+            <marker id="ah-sky" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#0EA5E9"/></marker>
+            <marker id="ah-green" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#10B981"/></marker>
+            <marker id="ah-amber" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,1 L11,6 L0,11 z" fill="#F59E0B"/></marker>
+          </defs>
+          <g id="gWires"></g>
+          <g id="gLabels"></g>
+          <g id="gBlocks"></g>
+          <g id="gPk"></g>
+        </svg>
+        <div class="legend">
+          <span><i style="background:#8B5CF6"></i>Instruction word</span>
+          <span><i style="background:#0EA5E9"></i>Address / PC</span>
+          <span><i style="background:#2F6BFF"></i>Data</span>
+          <span><i style="background:#10B981"></i>Result</span>
+          <span><i style="background:#F59E0B"></i>Control signal</span>
+          <span><i style="background:#E8F0FF;border:2px solid #7EA3F5"></i>Clocked block</span>
+          <span><i style="background:#F4F6FB;border:2px solid #B2BED6"></i>Combinational block</span>
+        </div>
+      </div>
+
+      <div class="card" id="tests">
+        <div class="tt-head">
+          <h3 style="margin:0">Test program · Appendix B, Set 4</h3>
+          <span class="tt-score" id="tt_score">Not run yet</span>
+          <button class="pill prog" id="btnProg2">▶ Run all tests</button>
+          <button class="pill" id="btnClear">Clear results</button>
+        </div>
+        <p class="note" style="margin:8px 0 12px">The program stored in the ROM is run after a reset. Cycle n happens at the rising clock edge at 10 + 20n ns. Click any row to run just that cycle, starting from the state the previous cycle left behind. <b>Expected</b> values are copied from Appendix B; <b>observed</b> values are read from the animated CPU after the write-back, so a mismatch would show in red.</p>
+        <div class="tt-wrap">
+          <table class="tt" id="tt">
+            <thead><tr><th>Cycle</th><th>Instruction</th><th>What should happen</th><th>Expected<br>ACC · Z · R · PC</th><th>Observed<br>ACC · Z · R · PC</th><th>Result</th></tr></thead>
+            <tbody id="tt_body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="card">
+        <h3>CPU state</h3>
+        <div class="reg"><span class="dot" style="background:#0EA5E9"></span><b>PC</b><code id="p_pc"></code></div>
+        <div class="reg"><span class="dot" style="background:#2F6BFF"></span><b>ACC</b><code id="p_acc"></code></div>
+        <div class="reg"><span class="dot" style="background:#8B5CF6"></span><b>R</b><code id="p_r"></code></div>
+        <div class="reg"><span class="dot" style="background:#10B981"></span><b>Z</b><code id="p_z"></code></div>
+      </div>
+      <div class="card" id="tc">
+        <h3>Test check</h3>
+        <div class="tc-top"><b id="tc_title">No test selected</b><span class="tc-res" id="tc_res"></span></div>
+        <table class="mini">
+          <tr><th></th><th>ACC</th><th>Z</th><th>R</th><th>PC</th></tr>
+          <tr><td>Expected</td><td id="te_acc">–</td><td id="te_z">–</td><td id="te_r">–</td><td id="te_pc">–</td></tr>
+          <tr><td>Observed</td><td id="to_acc">–</td><td id="to_z">–</td><td id="to_r">–</td><td id="to_pc">–</td></tr>
+        </table>
+        <p class="note" id="tc_note" style="margin-top:10px">Click a row in the test table, or run all tests.</p>
+      </div>
+      <div class="card">
+        <h3>Instruction word (12 bits)</h3>
+        <div class="bits" id="bits"></div>
+        <div class="wordline" id="wordline">Fetch an instruction to see it here.</div>
+      </div>
+      <div class="card">
+        <h3>Control signals</h3>
+        <div class="ctl-grid">
+          <div id="cg_sel">ALU_SEL <code id="c_sel">–</code></div>
+          <div id="cg_bsel">B_SEL <code id="c_bsel">–</code></div>
+          <div id="cg_acc">ACC_LOAD <code id="c_acc">–</code></div>
+          <div id="cg_z">Z_LOAD <code id="c_z">–</code></div>
+          <div id="cg_r">R_LOAD <code id="c_r">–</code></div>
+          <div id="cg_pc">PC_LOAD <code id="c_pc">–</code></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Selected instruction</h3>
+        <p class="note" id="insinfo"></p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var SVGNS = 'http://www.w3.org/2000/svg';
+function $(id){ return document.getElementById(id); }
+var CANCEL = { cancelled: true };
+function hex2(v){ return '0x' + (v & 255).toString(16).toUpperCase().padStart(2, '0'); }
+function hex3(v){ return '0x' + (v & 4095).toString(16).toUpperCase().padStart(3, '0'); }
+function bin(v, n){ return (v >>> 0).toString(2).padStart(n, '0').slice(-n); }
+
+/* ---------------- CPU model ---------------- */
+var OPS = {
+  LDI: { code: 1,  sel: '00', bsel: 0, acc: 1, z: 1, r: 0, imm: true,  full: 'LDI — Load Immediate',
+         info: 'ACC ← operand. The ALU passes B through. Z is updated. R is unchanged.' },
+  ADD: { code: 2,  sel: '01', bsel: 0, acc: 1, z: 1, r: 0, imm: true,  full: 'ADD — Add immediate',
+         info: 'ACC ← ACC + operand (carry out discarded). Z is updated. R is unchanged.' },
+  AND: { code: 4,  sel: '10', bsel: 0, acc: 1, z: 1, r: 0, imm: true,  full: 'AND — bitwise AND',
+         info: 'ACC ← ACC AND operand. Z is updated. R is unchanged.' },
+  STA: { code: 10, sel: '11', bsel: 0, acc: 0, z: 0, r: 1, imm: false, full: 'STA — STore Accumulator',
+         info: 'R ← ACC. The ALU is not used, ACC and Z keep their values, and the operand is ignored.' },
+  LDR: { code: 11, sel: '00', bsel: 1, acc: 1, z: 1, r: 0, imm: false, full: 'LDR — LoaD from Register R',
+         info: 'ACC ← R. The mux picks R as B and the ALU passes it through. Z is updated; the operand is ignored.' }
+};
+var ROM = [0x11E, 0xA00, 0x222, 0x460, 0xB00, 0x201, 0x40F, 0xA00, 0x100, 0xB00];
+var state = { pc: 0, acc: 0, r: 0, z: 1 };
+var ui = { speed: 1, paused: false, step: false, sel: 'LDI', opd: { LDI: 0x1E, ADD: 0x22, AND: 0x60 } };
+var runId = 0, lastAction = null, snapshot = null;
+
+/* ---------------- SVG builders ---------------- */
+function mk(tag, attrs, parent){
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(parent, x, y, cls, str, id, anchor){
+  var t = mk('text', { x: x, y: y, 'class': cls }, parent);
+  t.textContent = str;
+  if (id) t.setAttribute('id', id);
+  if (anchor) t.setAttribute('text-anchor', anchor);
+  return t;
+}
+var gWires = $('gWires'), gLabels = $('gLabels'), gBlocks = $('gBlocks'), gPk = $('gPk');
+
+var WIRES = [
+  { id: 'w_pc_rom',  d: 'M180,72 H250',                       lab: 'address',   x: 215,  y: 60 },
+  { id: 'w_opcode',  d: 'M330,114 V210',                      lab: 'opcode',    x: 340,  y: 166, a: 'start' },
+  { id: 'w_operand', d: 'M420,72 H610 V210',                  lab: 'operand',   x: 515,  y: 60 },
+  { id: 'w_bsel',    d: 'M450,252 H520',       cls: 'ctl',    lab: 'B_SEL',     x: 485,  y: 242 },
+  { id: 'w_alusel',  d: 'M390,306 V328 H560 V380', cls: 'ctl', lab: 'ALU_SEL',  x: 475,  y: 320, a: 'middle' },
+  { id: 'w_rload',   d: 'M410,306 V344 H760 V540', cls: 'ctl', lab: 'R_LOAD',   x: 722,  y: 337, a: 'middle' },
+  { id: 'w_zload',   d: 'M430,306 V360 H900 V388', cls: 'ctl', lab: 'Z_LOAD',   x: 862,  y: 353, a: 'middle' },
+  { id: 'w_accload', d: 'M312,306 V540',       cls: 'ctl',    lab: 'ACC_LOAD',  x: 304,  y: 430, a: 'end' },
+  { id: 'w_mux_alu', d: 'M660,294 V380',                      lab: 'B',         x: 670,  y: 326, a: 'start' },
+  { id: 'w_acc_alu', d: 'M340,540 V430 H520',                 lab: 'A = ACC',   x: 430,  y: 421 },
+  { id: 'w_alu_acc', d: 'M570,480 V510 H395 V540',            lab: 'result',    x: 482,  y: 503 },
+  { id: 'w_alu_z',   d: 'M720,430 H840',                      lab: 'zero',      x: 800,  y: 420 },
+  { id: 'w_acc_r',   d: 'M490,582 H620',                      lab: 'STA',       x: 555,  y: 572 },
+  { id: 'w_r_mux',   d: 'M810,582 H1030 V252 H700',           lab: 'LDR: R → B', x: 1022, y: 300, a: 'end' },
+  { id: 'w_pc_inc',  d: 'M70,30 V8 H140 V30',                 lab: '+1',        x: 105,  y: -2 }
+];
+WIRES.forEach(function(w){
+  mk('path', { id: w.id, d: w.d, 'class': 'wire ' + (w.cls || '') }, gWires);
+  txt(gLabels, w.x, w.y, 'lbl' + (w.cls === 'ctl' ? ' c' : ''), w.lab, null, w.a || 'middle');
+});
+var OUTS = [
+  { d: 'M105,114 V150', id: 'o_pc',  x: 105, y: 168, t: 'PC[3:0] = 0' },
+  { d: 'M395,624 V650', id: 'o_acc', x: 395, y: 668, t: 'Q[7:0] = 0x00' },
+  { d: 'M715,624 V650', id: 'o_r',   x: 715, y: 668, t: 'R_OUT = 0x00' },
+  { d: 'M905,472 V508', id: 'o_z',   x: 905, y: 526, t: 'Z = 1' }
+];
+OUTS.forEach(function(o){
+  mk('path', { d: o.d, 'class': 'wire out' }, gWires);
+  txt(gLabels, o.x, o.y, 'outl', o.t, o.id, 'middle');
+});
+
+function block(id, x, y, w, h, kind, title, valId, val, sub, subId){
+  var g = mk('g', { id: 'b_' + id, 'class': 'blk ' + kind }, gBlocks);
+  mk('rect', { x: x, y: y, width: w, height: h, rx: 14, 'class': 'shape' }, g);
+  txt(g, x + w / 2, y + 22, 'ttl', title);
+  txt(g, x + w / 2, y + h / 2 + 14, 'val', val, valId);
+  txt(g, x + w / 2, y + h - 10, 'sub', sub, subId);
+}
+block('pc',  30,  30,  150, 84, 'seq',  'Program Counter',   't_pc',  '0',   '0000', 't_pc_sub');
+block('rom', 250, 30,  170, 84, 'comb', 'Program ROM',       't_rom', '—',   '16 × 12 bit');
+block('ctl', 210, 210, 240, 96, 'ctl',  'Control Unit',      't_ctl', '—',   'decodes the opcode');
+block('mux', 520, 210, 180, 84, 'comb', 'Operand MUX',       't_mux', '—',   'B_SEL: immediate or R');
+block('z',   840, 388, 130, 84, 'seq',  'Z flag',            't_z',   '1',   'stored inverted');
+block('acc', 300, 540, 190, 84, 'seq',  'Accumulator (ACC)', 't_acc', '0x00', '8 bit');
+block('r',   620, 540, 190, 84, 'seq',  'Register R',        't_r',   '0x00', '8 bit');
+(function(){
+  var g = mk('g', { id: 'b_alu', 'class': 'blk comb' }, gBlocks);
+  mk('rect', { x: 520, y: 380, width: 200, height: 100, rx: 14, 'class': 'shape' }, g);
+  txt(g, 620, 402, 'ttl', 'ALU');
+  txt(g, 620, 436, 'mono', '—', 't_alu_op');
+  txt(g, 620, 464, 'sub', '', 't_alu_res');
+})();
+function badge(id, x, y, w, h, label){
+  var g = mk('g', { id: id, 'class': 'badge' }, gBlocks);
+  mk('rect', { x: x, y: y, width: w, height: h, rx: 10 }, g);
+  var t = mk('text', { x: x + w / 2, y: y + h / 2 }, g);
+  t.textContent = label;
+}
+badge('rst', 830, -8, 100, 34, 'RESET');
+badge('clk', 944, -8, 100, 34, 'CLK ↑');
+
+/* word bits */
+(function(){
+  var b = $('bits');
+  for (var i = 0; i < 12; i++){
+    var s = document.createElement('span');
+    s.className = 'bit' + (i === 4 ? ' gap' : '');
+    s.textContent = '·';
+    b.appendChild(s);
+  }
+})();
+
+/* ---------------- timing helpers ---------------- */
+function ease(p){ return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; }
+function anim(ms, fn){
+  var id = runId;
+  return new Promise(function(res, rej){
+    var t = 0, last = null;
+    function frame(now){
+      if (id !== runId) { rej(CANCEL); return; }
+      if (last === null) last = now;
+      var dt = now - last; last = now;
+      if (!ui.paused) t += dt * ui.speed;
+      var p = Math.min(1, t / ms);
+      fn(p);
+      if (p >= 1) res(); else requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+}
+function wait(ms){ return anim(ms, function(){}); }
+
+var gateState = { res: null, rej: null };
+function gate(){
+  if (!ui.step) return Promise.resolve();
+  return new Promise(function(res, rej){
+    gateState.res = res; gateState.rej = rej;
+    var nb = $('btnNext'); nb.disabled = false; nb.classList.add('pulse');
+  });
+}
+function endGateUi(){ var nb = $('btnNext'); nb.disabled = true; nb.classList.remove('pulse'); }
+function releaseGate(){ if (gateState.res){ var r = gateState.res; gateState.res = gateState.rej = null; endGateUi(); r(); } }
+function cancelGate(){ if (gateState.rej){ var r = gateState.rej; gateState.res = gateState.rej = null; endGateUi(); r(CANCEL); } }
+
+/* ---------------- visual helpers ---------------- */
+var LIVE = ['live', 'live-data', 'live-instr', 'live-addr', 'live-result', 'live-ctl'];
+function makePacket(label, kind){
+  var g = mk('g', { 'class': 'pkt ' + kind }, gPk);
+  var w = Math.max(30, label.length * 8 + 16);
+  mk('rect', { x: -w / 2, y: -12, width: w, height: 24, rx: 12 }, g);
+  var t = mk('text', { x: 0, y: 0 }, g);
+  t.textContent = label;
+  return g;
+}
+function send(wireId, label, kind){
+  var path = $(wireId), len = path.getTotalLength();
+  var base = kind.split(' ')[0];
+  var g = makePacket(label, kind);
+  var p0 = path.getPointAtLength(0);
+  g.setAttribute('transform', 'translate(' + p0.x + ',' + p0.y + ')');
+  path.classList.add('live', 'live-' + base);
+  var dur = Math.max(450, len * 1.9);
+  return anim(dur, function(p){
+    var pt = path.getPointAtLength(len * ease(p));
+    g.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+  }).then(function(){
+    path.classList.remove('live', 'live-' + base); g.remove();
+  }, function(e){ g.remove(); throw e; });
+}
+function glow(id, on){ $('b_' + id).classList.toggle('active', on !== false); }
+function clearGlow(){
+  ['pc', 'rom', 'ctl', 'mux', 'alu', 'acc', 'r', 'z'].forEach(function(k){ glow(k, false); });
+  $('clk').classList.remove('on'); $('rst').classList.remove('on');
+}
+function cleanup(){
+  while (gPk.firstChild) gPk.removeChild(gPk.firstChild);
+  WIRES.forEach(function(w){ var el = $(w.id); LIVE.forEach(function(c){ el.classList.remove(c); }); });
+  clearGlow();
+}
+function flash(el){
+  var cls = (el instanceof SVGElement) ? 'flash' : 'flashbg';
+  el.classList.remove(cls);
+  el.getBoundingClientRect();
+  el.classList.add(cls);
+  setTimeout(function(){ el.classList.remove(cls); }, 950);
+}
+function pulseClk(){
+  var c = $('clk'); c.classList.add('on');
+  setTimeout(function(){ c.classList.remove('on'); }, 1100);
+}
+function setPhase(i, html){
+  for (var k = 0; k < 4; k++){
+    $('st' + k).className = i < 0 ? '' : (k < i ? 'done' : (k === i ? 'now' : ''));
+  }
+  $('caption').innerHTML = html;
+}
+function allPhasesDone(){ for (var k = 0; k < 4; k++) $('st' + k).className = 'done'; }
+
+function showReg(k, v, fl){
+  var disp = { pc: String(v), acc: hex2(v), r: hex2(v), z: String(v) }[k];
+  $('t_' + k).textContent = disp;
+  if (k === 'pc') $('t_pc_sub').textContent = bin(v, 4);
+  $('o_' + k).textContent = { pc: 'PC[3:0] = ' + v, acc: 'Q[7:0] = ' + hex2(v), r: 'R_OUT = ' + hex2(v), z: 'Z = ' + v }[k];
+  $('p_' + k).textContent = { pc: v + '  (' + bin(v, 4) + ')', acc: hex2(v) + '  (' + bin(v, 8) + ')', r: hex2(v) + '  (' + bin(v, 8) + ')', z: String(v) }[k];
+  if (fl){ flash($('t_' + k)); flash($('p_' + k).parentElement); }
+}
+function renderState(){ ['pc', 'acc', 'r', 'z'].forEach(function(k){ showReg(k, state[k], false); }); }
+function resetUnitTexts(){
+  $('t_rom').textContent = '—'; $('t_ctl').textContent = '—'; $('t_mux').textContent = '—';
+  $('t_alu_op').textContent = '—'; $('t_alu_res').textContent = '';
+}
+function showWord(word, label){
+  var bits = $('bits').children;
+  if (word === null){
+    for (var i = 0; i < 12; i++){ bits[i].className = 'bit' + (i === 4 ? ' gap' : ''); bits[i].textContent = '·'; }
+    $('wordline').textContent = 'Fetch an instruction to see it here.';
+    return;
+  }
+  var s = bin(word, 12);
+  for (var j = 0; j < 12; j++){
+    bits[j].className = 'bit ' + (j < 4 ? 'o' : 'm') + (j === 4 ? ' gap' : '');
+    bits[j].textContent = s.charAt(j);
+  }
+  $('wordline').innerHTML = '<b>' + hex3(word) + '</b> · ' + label + '<br>opcode <b>' + s.slice(0, 4) + '</b> · operand <b>' + s.slice(4) + '</b>';
+}
+function showCtl(op){
+  var vals = op ? { sel: (op === OPS.STA ? '–' : op.sel), bsel: String(op.bsel), acc: String(op.acc), z: String(op.z), r: String(op.r), pc: '0' }
+                : { sel: '–', bsel: '–', acc: '–', z: '–', r: '–', pc: '–' };
+  ['sel', 'bsel', 'acc', 'z', 'r', 'pc'].forEach(function(k){
+    $('c_' + k).textContent = vals[k];
+    $('cg_' + k).classList.toggle('one', vals[k] === '1');
+  });
+}
+
+/* ---------------- test program (Appendix B, Set 4) ---------------- */
+var TESTS = [
+  { n: 0,  name: 'RESET', opnd: null, acc: 0x00, z: 1, r: 0x00, pc: 0,  what: 'RESET = 1 forces PC, ACC and R to 0 and Z to 1.' },
+  { n: 1,  name: 'LDI', opnd: 0x1E,   acc: 0x1E, z: 0, r: 0x00, pc: 1,  what: 'ACC loads the immediate 0x1E. It is not zero, so Z drops to 0.' },
+  { n: 2,  name: 'STA', opnd: 0,      acc: 0x1E, z: 0, r: 0x1E, pc: 2,  what: 'R ← ACC = 0x1E. ACC and Z are unchanged.' },
+  { n: 3,  name: 'ADD', opnd: 0x22,   acc: 0x40, z: 0, r: 0x1E, pc: 3,  what: '0x1E + 0x22 = 0x40.' },
+  { n: 4,  name: 'AND', opnd: 0x60,   acc: 0x40, z: 0, r: 0x1E, pc: 4,  what: '0x40 AND 0x60 = 0x40.' },
+  { n: 5,  name: 'LDR', opnd: 0,      acc: 0x1E, z: 0, r: 0x1E, pc: 5,  what: 'ACC ← R = 0x1E. This proves STA really stored the value.' },
+  { n: 6,  name: 'ADD', opnd: 0x01,   acc: 0x1F, z: 0, r: 0x1E, pc: 6,  what: '0x1E + 0x01 = 0x1F.' },
+  { n: 7,  name: 'AND', opnd: 0x0F,   acc: 0x0F, z: 0, r: 0x1E, pc: 7,  what: '0x1F AND 0x0F = 0x0F.' },
+  { n: 8,  name: 'STA', opnd: 0,      acc: 0x0F, z: 0, r: 0x0F, pc: 8,  what: 'R ← ACC = 0x0F. ACC and Z are unchanged.' },
+  { n: 9,  name: 'LDI', opnd: 0x00,   acc: 0x00, z: 1, r: 0x0F, pc: 9,  what: 'ACC ← 0x00. The result is zero, so Z rises to 1.' },
+  { n: 10, name: 'LDR', opnd: 0,      acc: 0x0F, z: 0, r: 0x0F, pc: 10, what: 'ACC ← R = 0x0F, so Z falls back to 0.' }
+];
+var obs = {};
+function fmtT(o){ return hex2(o.acc) + ' · ' + o.z + ' · ' + hex2(o.r) + ' · ' + o.pc; }
+function testLabel(t){ return t.n === 0 ? 'RESET' : t.name + (OPS[t.name].imm ? ' ' + hex2(t.opnd) : ''); }
+
+function buildTests(){
+  var tb = $('tt_body');
+  TESTS.forEach(function(t){
+    var tr = document.createElement('tr');
+    tr.className = 'row';
+    tr.id = 'tr_' + t.n;
+    var sub = t.n === 0 ? 'RESET input high' : 'ROM[' + (t.n - 1) + '] = ' + hex3(ROM[t.n - 1]);
+    tr.innerHTML =
+      '<td class="cy"><b>' + t.n + '</b><small>' + (10 + 20 * t.n) + ' ns</small></td>' +
+      '<td><b class="in">' + testLabel(t) + '</b><small>' + sub + '</small></td>' +
+      '<td class="wh">' + t.what + '</td>' +
+      '<td class="mo">' + fmtT(t) + '</td>' +
+      '<td class="mo" id="obs_' + t.n + '">–</td>' +
+      '<td class="rs" id="res_' + t.n + '"><span class="go">▶ run</span></td>';
+    tr.addEventListener('click', function(){ startTest(t.n); });
+    tb.appendChild(tr);
+  });
+}
+function updateScore(){
+  var done = 0, pass = 0;
+  TESTS.forEach(function(t){ if (obs[t.n]){ done++; if (obs[t.n].ok) pass++; } });
+  var el = $('tt_score');
+  if (!done){ el.textContent = 'Not run yet'; el.className = 'tt-score'; return; }
+  el.textContent = pass + ' / ' + TESTS.length + ' passed' + (done < TESTS.length ? ' · ' + done + ' run' : '');
+  el.className = 'tt-score ' + (pass === done ? 'ok' : 'bad');
+}
+function showTestCheck(n, o){
+  var ks = ['acc', 'z', 'r', 'pc'];
+  if (n === null){
+    $('tc_title').textContent = 'No test selected';
+    $('tc_res').textContent = ''; $('tc_res').className = 'tc-res';
+    ks.forEach(function(k){ $('te_' + k).textContent = '–'; $('to_' + k).textContent = '–'; $('to_' + k).className = ''; });
+    $('tc_note').textContent = 'Click a row in the test table, or run all tests.';
+    return;
+  }
+  var t = TESTS[n];
+  $('tc_title').textContent = 'Cycle ' + n + ' · ' + testLabel(t);
+  ks.forEach(function(k){
+    $('te_' + k).textContent = (k === 'acc' || k === 'r') ? hex2(t[k]) : String(t[k]);
+    var c = $('to_' + k);
+    if (!o){ c.textContent = '…'; c.className = ''; }
+    else { c.textContent = (k === 'acc' || k === 'r') ? hex2(o[k]) : String(o[k]); c.className = (o[k] === t[k]) ? 'okc' : 'badc'; }
+  });
+  var r = $('tc_res');
+  if (!o){ r.textContent = 'running…'; r.className = 'tc-res'; }
+  else { r.textContent = o.ok ? '✓ Pass' : '✗ Fail'; r.className = 'tc-res ' + (o.ok ? 'p' : 'f'); }
+  $('tc_note').textContent = t.what;
+}
+function beginTest(n){
+  delete obs[n];
+  TESTS.forEach(function(x){ $('tr_' + x.n).classList.remove('run'); });
+  var tr = $('tr_' + n);
+  tr.classList.remove('pass', 'fail');
+  tr.classList.add('run');
+  $('obs_' + n).textContent = '…'; $('obs_' + n).className = 'mo';
+  $('res_' + n).innerHTML = '<span class="go">running…</span>';
+  showTestCheck(n, null);
+  updateScore();
+}
+function markTest(n){
+  var t = TESTS[n];
+  var o = { acc: state.acc, z: state.z, r: state.r, pc: state.pc };
+  o.ok = (o.acc === t.acc && o.z === t.z && o.r === t.r && o.pc === t.pc);
+  obs[n] = o;
+  var tr = $('tr_' + n);
+  tr.classList.remove('run');
+  tr.classList.add(o.ok ? 'pass' : 'fail');
+  var cell = $('obs_' + n);
+  cell.textContent = fmtT(o);
+  cell.className = 'mo ' + (o.ok ? 'okc' : 'badc');
+  $('res_' + n).innerHTML = o.ok ? '<span class="p">✓ Pass</span>' : '<span class="f">✗ Fail</span>';
+  showTestCheck(n, o);
+  updateScore();
+}
+function clearTests(){
+  obs = {};
+  TESTS.forEach(function(t){
+    $('tr_' + t.n).classList.remove('run', 'pass', 'fail');
+    $('obs_' + t.n).textContent = '–'; $('obs_' + t.n).className = 'mo';
+    $('res_' + t.n).innerHTML = '<span class="go">▶ run</span>';
+  });
+  showTestCheck(null, null);
+  updateScore();
+}
+function showCircuit(){
+  var r = $('cpu').getBoundingClientRect();
+  if (r.top < 0 || r.bottom > window.innerHeight) $('cpu').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/* ---------------- instruction execution ---------------- */
+async function execInstr(name, operand, fromRom, testNo){
+  var op = OPS[name];
+  var s0 = { pc: state.pc, acc: state.acc, r: state.r, z: state.z };
+  var opnd = op.imm ? operand : 0;
+  var word = (op.code << 8) | opnd;
+  var A = s0.acc, B = op.bsel ? s0.r : opnd;
+  var res = null, carry = false, aluTxt = '';
+  if (name === 'LDI' || name === 'LDR'){ res = B; aluTxt = 'pass B'; }
+  else if (name === 'ADD'){ var full = A + B; res = full & 255; carry = full > 255; aluTxt = 'A + B'; }
+  else if (name === 'AND'){ res = A & B; aluTxt = 'A AND B'; }
+  var s1 = { pc: (s0.pc + 1) & 15, acc: s0.acc, r: s0.r, z: s0.z };
+  if (op.acc) s1.acc = res;
+  if (op.z) s1.z = (res === 0) ? 1 : 0;
+  if (op.r) s1.r = s0.acc;
+  var label = name + (op.imm ? ' ' + hex2(opnd) : '');
+
+  /* 1. FETCH */
+  setPhase(0, '<b>Fetch.</b> PC = ' + s0.pc + ' addresses the program ROM, which returns the 12-bit word <code>' + hex3(word) + '</code> = <code>' +
+    bin(word >> 8, 4) + ' ' + bin(opnd, 8) + '</code>. The top 4 bits (opcode) go to the control unit; the low 8 bits (operand) go toward the operand mux.' +
+    (fromRom ? '' : ' <i>(Demo: the ROM is shown returning the instruction you chose.)</i>'));
+  await gate();
+  glow('pc');
+  await send('w_pc_rom', 'PC = ' + s0.pc, 'addr');
+  glow('rom');
+  $('t_rom').textContent = hex3(word);
+  showWord(word, label);
+  await wait(300);
+  await Promise.all([
+    send('w_opcode', bin(word >> 8, 4), 'instr'),
+    send('w_operand', hex2(opnd), op.imm ? 'instr' : 'instr dim')
+  ]);
+  glow('pc', false); glow('rom', false);
+
+  /* 2. DECODE */
+  var decTxt = {
+    LDI: 'Opcode <code>0001</code> = LDI. ALU_SEL = <code>00</code> (pass B), B_SEL = 0 (take the immediate), ACC_LOAD = 1, Z_LOAD = 1, R_LOAD = 0, PC_LOAD = 0.',
+    ADD: 'Opcode <code>0010</code> = ADD. ALU_SEL = <code>01</code> (add), B_SEL = 0 (take the immediate), ACC_LOAD = 1, Z_LOAD = 1, R_LOAD = 0, PC_LOAD = 0.',
+    AND: 'Opcode <code>0100</code> = AND. ALU_SEL = <code>10</code> (AND), B_SEL = 0 (take the immediate), ACC_LOAD = 1, Z_LOAD = 1, R_LOAD = 0, PC_LOAD = 0.',
+    STA: 'Opcode <code>1010</code> = STA. Only R_LOAD = 1. ACC_LOAD = 0 and Z_LOAD = 0, so ACC and Z keep their values, and the ALU is not needed.',
+    LDR: 'Opcode <code>1011</code> = LDR. ALU_SEL = <code>00</code> (pass B) and B_SEL = 1, so B comes from R. ACC_LOAD = 1, Z_LOAD = 1, R_LOAD = 0.'
+  }[name];
+  setPhase(1, '<b>Decode.</b> ' + decTxt);
+  await gate();
+  glow('ctl');
+  $('t_ctl').textContent = name;
+  showCtl(op);
+  var pulses = [
+    send('w_bsel', String(op.bsel), op.bsel ? 'ctl' : 'ctl off'),
+    send('w_accload', String(op.acc), op.acc ? 'ctl' : 'ctl off'),
+    send('w_rload', String(op.r), op.r ? 'ctl' : 'ctl off'),
+    send('w_zload', String(op.z), op.z ? 'ctl' : 'ctl off')
+  ];
+  if (name !== 'STA') pulses.push(send('w_alusel', op.sel, 'ctl'));
+  await Promise.all(pulses);
+  glow('ctl', false);
+
+  /* 3. EXECUTE */
+  var exeTxt = {
+    LDI: 'The operand mux hands the immediate <code>' + hex2(opnd) + '</code> to the ALU as B. With ALU_SEL = 00 the ALU passes B straight through, so RESULT = <code>' + hex2(res) + '</code>. (A, the accumulator, is ignored.)',
+    ADD: 'A = ACC = <code>' + hex2(A) + '</code> and B = immediate <code>' + hex2(B) + '</code> enter the adder: <code>' + hex2(A) + ' + ' + hex2(B) + ' = ' + hex2(res) + '</code>' + (carry ? ' (the carry out is discarded, so the sum wraps modulo 256)' : '') + '.',
+    AND: 'A = ACC = <code>' + hex2(A) + '</code> and B = immediate <code>' + hex2(B) + '</code> go through the AND gates bit by bit: <code>' + hex2(A) + ' AND ' + hex2(B) + ' = ' + hex2(res) + '</code>.',
+    STA: 'STA needs no ALU work: the accumulator value <code>' + hex2(A) + '</code> travels to R\'s input and waits for the clock edge.',
+    LDR: 'B_SEL = 1, so the operand mux picks R (<code>' + hex2(s0.r) + '</code>) instead of the immediate. The ALU passes B through, so RESULT = <code>' + hex2(res) + '</code>.'
+  }[name];
+  setPhase(2, '<b>Execute.</b> ' + exeTxt);
+  await gate();
+  if (name === 'STA'){
+    glow('acc'); glow('r');
+    await send('w_acc_r', hex2(A), 'data');
+  } else {
+    glow('mux');
+    if (op.bsel){ glow('r'); await send('w_r_mux', hex2(s0.r), 'data'); glow('r', false); }
+    $('t_mux').textContent = (op.bsel ? 'R = ' : 'imm = ') + hex2(B);
+    glow('alu');
+    var sends = [send('w_mux_alu', hex2(B), 'data')];
+    if (name === 'ADD' || name === 'AND'){ glow('acc'); sends.push(send('w_acc_alu', hex2(A), 'data')); }
+    await Promise.all(sends);
+    $('t_alu_op').textContent = aluTxt;
+    await wait(350);
+    $('t_alu_res').textContent = '= ' + hex2(res) + ' · ZERO = ' + (res === 0 ? 1 : 0);
+    flash($('t_alu_op'));
+    await wait(600);
+    glow('mux', false);
+  }
+
+  /* 4. WRITE-BACK */
+  var wbTxt = (name === 'STA')
+    ? '<b>Write-back (rising clock edge).</b> R ← <code>' + hex2(s1.r) + '</code>. ACC and Z keep their values. PC ← PC + 1 = ' + s1.pc + '.'
+    : '<b>Write-back (rising clock edge).</b> ACC ← <code>' + hex2(res) + '</code>, Z ← ' + s1.z + ' (' + (res === 0 ? 'the result is zero' : 'the result is not zero') + '), PC ← PC + 1 = ' + s1.pc + '. R is unchanged.';
+  setPhase(3, wbTxt);
+  await gate();
+  pulseClk();
+  glow('pc');
+  var tasks = [];
+  if (op.acc){
+    glow('acc'); glow('z');
+    tasks.push(send('w_alu_acc', hex2(res), 'result').then(function(){ showReg('acc', s1.acc, true); }));
+    tasks.push(send('w_alu_z', String(s1.z), 'result').then(function(){ showReg('z', s1.z, true); }));
+  }
+  if (op.r){
+    glow('r');
+    tasks.push(wait(500).then(function(){ showReg('r', s1.r, true); }));
+  }
+  tasks.push(send('w_pc_inc', '+1', 'addr').then(function(){ showReg('pc', s1.pc, true); }));
+  await Promise.all(tasks);
+  state.pc = s1.pc; state.acc = s1.acc; state.r = s1.r; state.z = s1.z;
+  if (testNo !== undefined && testNo !== null) markTest(testNo);
+  await wait(500);
+  clearGlow();
+  allPhasesDone();
+}
+
+async function doReset(mark){
+  setPhase(-1, '<b>Reset.</b> RESET = 1 at a rising clock edge: PC ← 0, ACC ← 0x00, R ← 0x00, Z ← 1. Reset has priority over everything else.');
+  $('rst').classList.add('on');
+  pulseClk();
+  ['pc', 'acc', 'r', 'z'].forEach(function(k){ glow(k); });
+  await wait(800);
+  state.pc = 0; state.acc = 0; state.r = 0; state.z = 1;
+  ['pc', 'acc', 'r', 'z'].forEach(function(k){ showReg(k, state[k], true); });
+  showWord(null); showCtl(null); resetUnitTexts();
+  if (mark) markTest(0);
+  await wait(1000);
+  clearGlow();
+}
+
+function resetTest(){ beginTest(0); return doReset(true); }
+
+async function runProgram(){
+  clearTests();
+  beginTest(0);
+  await doReset(true);
+  for (var i = 0; i < ROM.length; i++){
+    var word = ROM[state.pc];
+    var code = word >> 8, opnd = word & 255;
+    var name = Object.keys(OPS).filter(function(k){ return OPS[k].code === code; })[0];
+    var cyc = $('cycle');
+    cyc.className = 'cycle show';
+    cyc.textContent = 'Cycle ' + (i + 1) + ' of 10 · ROM[' + state.pc + '] = ' + hex3(word) + ' · ' + name + (OPS[name].imm ? ' ' + hex2(opnd) : '');
+    resetUnitTexts();
+    beginTest(i + 1);
+    await execInstr(name, opnd, true, i + 1);
+    await wait(300);
+  }
+  var passed = TESTS.filter(function(t){ return obs[t.n] && obs[t.n].ok; }).length;
+  setPhase(3, '<b>Test program finished.</b> After 10 cycles: ACC = <code>' + hex2(state.acc) + '</code>, R = <code>' + hex2(state.r) + '</code>, Z = ' + state.z + ', PC = ' + state.pc + '. ' + passed + ' of ' + TESTS.length + ' checks match Appendix B' + (passed === TESTS.length ? ': every result is Pass.' : '.'));
+  allPhasesDone();
+}
+
+/* ---------------- run control ---------------- */
+async function launch(fn, keepCycle){
+  var my = ++runId;
+  cancelGate();
+  cleanup();
+  renderState();
+  resetUnitTexts();
+  if (!keepCycle){ $('cycle').className = 'cycle'; }
+  for (var k = 0; k < 4; k++) $('st' + k).className = '';
+  try { await fn(); }
+  catch (e){ if (e !== CANCEL) console.error(e); }
+  finally { if (my === runId){ cleanup(); } }
+}
+
+function updateSelection(){
+  var buttons = document.querySelectorAll('.op');
+  for (var i = 0; i < buttons.length; i++) buttons[i].classList.toggle('sel', buttons[i].getAttribute('data-op') === ui.sel);
+  var op = OPS[ui.sel];
+  $('insinfo').innerHTML = '<b>' + op.full + '</b><br>' + op.info;
+  var inp = $('opd');
+  inp.disabled = !op.imm;
+  inp.value = op.imm ? ui.opd[ui.sel].toString(16).toUpperCase().padStart(2, '0') : '--';
+}
+function readOperand(name){
+  if (!OPS[name].imm) return 0;
+  var n = parseInt($('opd').value.trim(), 16);
+  if (!isNaN(n) && n >= 0 && n <= 255) ui.opd[name] = n;
+  return ui.opd[name];
+}
+function startInstr(name){
+  ui.sel = name;
+  updateSelection();
+  var operand = readOperand(name);
+  snapshot = { pc: state.pc, acc: state.acc, r: state.r, z: state.z };
+  lastAction = { t: 'instr', name: name, operand: operand };
+  launch(function(){ return execInstr(name, operand, false); });
+}
+
+(function(){
+  var buttons = document.querySelectorAll('.op');
+  for (var i = 0; i < buttons.length; i++){
+    buttons[i].addEventListener('click', function(){ startInstr(this.getAttribute('data-op')); });
+  }
+})();
+$('btnReset').addEventListener('click', function(){
+  snapshot = { pc: state.pc, acc: state.acc, r: state.r, z: state.z };
+  lastAction = { t: 'reset' };
+  launch(resetTest);
+});
+function runAll(){
+  lastAction = { t: 'prog' };
+  showCircuit();
+  launch(runProgram, true);
+}
+function testCycleFn(n){
+  var t = TESTS[n];
+  return function(){
+    var c = $('cycle');
+    c.className = 'cycle show';
+    c.textContent = 'Cycle ' + n + ' of 10 · ROM[' + (n - 1) + '] = ' + hex3(ROM[n - 1]) + ' · ' + testLabel(t);
+    beginTest(n);
+    return execInstr(t.name, t.opnd, true, n);
+  };
+}
+function startTest(n){
+  showCircuit();
+  if (n === 0){
+    snapshot = { pc: state.pc, acc: state.acc, r: state.r, z: state.z };
+    lastAction = { t: 'reset' };
+    launch(resetTest);
+    return;
+  }
+  var t = TESTS[n], prev = TESTS[n - 1];
+  state.pc = prev.pc; state.acc = prev.acc; state.r = prev.r; state.z = prev.z;
+  snapshot = { pc: state.pc, acc: state.acc, r: state.r, z: state.z };
+  ui.sel = t.name;
+  if (OPS[t.name].imm) ui.opd[t.name] = t.opnd;
+  updateSelection();
+  lastAction = { t: 'instr', name: t.name, operand: t.opnd, test: n };
+  launch(testCycleFn(n), true);
+}
+$('btnProg').addEventListener('click', runAll);
+$('btnProg2').addEventListener('click', runAll);
+$('btnClear').addEventListener('click', clearTests);
+$('btnReplay').addEventListener('click', function(){
+  if (!lastAction) return;
+  if (lastAction.t === 'instr'){
+    state.pc = snapshot.pc; state.acc = snapshot.acc; state.r = snapshot.r; state.z = snapshot.z;
+    var a = lastAction;
+    if (a.test !== undefined) launch(testCycleFn(a.test), true);
+    else launch(function(){ return execInstr(a.name, a.operand, false); });
+  } else if (lastAction.t === 'reset'){
+    state.pc = snapshot.pc; state.acc = snapshot.acc; state.r = snapshot.r; state.z = snapshot.z;
+    launch(resetTest);
+  } else {
+    launch(runProgram, true);
+  }
+});
+$('btnPause').addEventListener('click', function(){
+  ui.paused = !ui.paused;
+  this.textContent = ui.paused ? '▶ Resume' : '⏸ Pause';
+});
+$('chkStep').addEventListener('change', function(){
+  ui.step = this.checked;
+  if (!ui.step) releaseGate();
+});
+$('btnNext').addEventListener('click', releaseGate);
+$('speed').addEventListener('input', function(){
+  ui.speed = (+this.value) / 4;
+  $('speedv').textContent = ui.speed + '×';
+});
+$('opd').addEventListener('input', function(){
+  var n = parseInt(this.value.trim(), 16);
+  if (!isNaN(n) && n >= 0 && n <= 255 && OPS[ui.sel].imm) ui.opd[ui.sel] = n;
+});
+
+$('opd').addEventListener('keydown', function(e){ if (e.key === 'Enter') startInstr(ui.sel); });
+
+/* ---------------- initial paint ---------------- */
+renderState();
+showCtl(null);
+showWord(null);
+buildTests();
+showTestCheck(null, null);
+updateScore();
+updateSelection();
+setPhase(-1, 'Pick an instruction above, or press <b>Run Appendix B program</b> to watch all ten cycles and check each result against Appendix B, or click a row in the test table below the circuit. Tick <b>Step by step</b> and use <b>Next</b> to move one phase at a time while you explain.');
+})();
+</script>
+</body>
+</html>
