@@ -1,0 +1,7 @@
+vhdl work "nand_gate.vhd"
+vhdl work "sr_latch.vhd"
+vhdl work "not_gate.vhd"
+vhdl work "d_latch.vhd"
+vhdl work "d_ff.vhd"
+vhdl work "reg_1bit.vhd"
+vhdl work "reg_8bit.vhd"
